@@ -60,6 +60,10 @@ libusb-compat
 linux-atm
 linux-firmware
 linux-firmware-marvell
+# Arch Linux ARM splits the Qualcomm blobs out of linux-firmware: GPU microcode
+# (gen70500_sqe), Wi-Fi/BT board data. Without it the live session has a
+# display but no GPU (JimmayVV/omarchy-iso#10).
+linux-firmware-qcom
 livecd-sounds
 lsscsi
 lvm2
