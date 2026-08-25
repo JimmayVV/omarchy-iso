@@ -498,8 +498,13 @@ printf '%s\n' "${required_package_files[@]}" |
 # Rebuild the offline repo db from scratch so size/checksum/depends entries
 # always reflect only the package files selected for this build.
 rm -f "$offline_mirror_dir"/offline.db* "$offline_mirror_dir"/offline.files*
-repo-add "$offline_mirror_dir/offline.db.tar.gz" \
-  "$offline_mirror_dir/"*.pkg.tar.zst "$offline_mirror_dir/"*.pkg.tar.xz
+# Arch Linux ARM packages are .xz and Arch's are .zst; a mirror rarely holds
+# both. An unmatched glob stays literal and makes repo-add reject the whole
+# database ("File '*.pkg.tar.zst' not found"), so expand with nullglob.
+shopt -s nullglob
+offline_package_files=("$offline_mirror_dir/"*.pkg.tar.zst "$offline_mirror_dir/"*.pkg.tar.xz)
+shopt -u nullglob
+repo-add "$offline_mirror_dir/offline.db.tar.gz" "${offline_package_files[@]}"
 
 # mkarchiso expects the mirror at /var/cache/omarchy/mirror/offline inside the
 # container (the airootfs path); symlink rather than duplicate.
