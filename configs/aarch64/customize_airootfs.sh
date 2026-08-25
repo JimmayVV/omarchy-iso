@@ -97,4 +97,9 @@ if [[ ! -s /boot/initramfs-linux-aarch64.img ]]; then
 fi
 echo "customize_airootfs: initramfs present ($(stat -c %s /boot/initramfs-linux-aarch64.img) bytes)"
 
+# Windows-on-ARM laptops need a device tree their firmware does not provide.
+# Wrap the kernel and initramfs checked above into a UKI that carries them
+# (JimmayVV/omarchy-iso#12). It has to happen here: mkarchiso empties /boot next.
+/root/live-uki.sh || exit 1
+
 exit 0

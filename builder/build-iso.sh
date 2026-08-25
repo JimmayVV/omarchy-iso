@@ -216,6 +216,8 @@ if [[ $ISO_ARCH == aarch64 ]]; then
     "$build_cache_dir/airootfs/etc/mkinitcpio.d/linux.preset"
   install -Dm755 /configs/aarch64/customize_airootfs.sh \
     "$build_cache_dir/airootfs/root/customize_airootfs.sh"
+  install -Dm755 /configs/aarch64/live-uki.sh \
+    "$build_cache_dir/airootfs/root/live-uki.sh"
   # The T2 preset has no kernel image on this architecture, and pacstrap's
   # mkinitcpio hook would fail on it before customize_airootfs.sh can run:
   #   ERROR: Invalid option -k -- '/boot/vmlinuz-linux-t2' must be readable

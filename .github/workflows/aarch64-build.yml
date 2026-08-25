@@ -86,7 +86,7 @@ jobs:
             echo "== $iso"
             sha256sum "$iso"
             xorriso -indev "$iso" -ls /EFI/BOOT/ 2>/dev/null
-            xorriso -indev "$iso" -ls /arch/boot/ 2>/dev/null
+            xorriso -indev "$iso" -lsl /arch/boot/aarch64/ 2>/dev/null
           done
           df -h
 

@@ -106,6 +106,7 @@ sof-firmware
 squashfs-tools
 sudo
 systemd-resolvconf
+systemd-ukify
 tcpdump
 terminus-font
 testdisk
