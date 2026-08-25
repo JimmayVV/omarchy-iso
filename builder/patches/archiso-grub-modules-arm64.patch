@@ -1,0 +1,28 @@
+archiso v87 (and v89) hardcodes a GRUB module list that includes seven
+modules with no arm64-efi build (at_keyboard keylayouts usb usbserial_common
+usbserial_ftdi usbserial_pl2303 usbserial_usbdebug), so grub-mkstandalone
+aborts on aarch64. Filter the list to what exists for the target. Applied by
+builder/build-iso.sh to the vendored submodule copy on aarch64 builds only.
+
+Retire when: archiso's _make_bootmode_uefi.grub() filters the list itself
+(no upstream MR as of 2026-08-24; see JimmayVV/omarchy-iso#7).
+
+--- a/archiso/mkarchiso
++++ b/archiso/mkarchiso
+@@ -691,6 +691,16 @@
+                  minicmd normal ntfs ntfscomp part_apple part_gpt part_msdos png read reboot regexp search \
+                  search_fs_file search_fs_uuid search_label serial sleep tpm udf usb usbserial_common usbserial_ftdi \
+                  usbserial_pl2303 usbserial_usbdebug video xfs zstd)
++    # Keep only the modules that exist for this target: at_keyboard, keylayouts
++    # and usb* are x86-only and abort grub-mkstandalone on arm64-efi.
++    # x86_64 keeps the full list above untouched.
++    if [[ "${arch}" == 'aarch64' ]]; then
++        local _grubmodule _present_grubmodules=()
++        for _grubmodule in "${grubmodules[@]}"; do
++            [[ -e "/usr/lib/grub/${grub_target}/${_grubmodule}.mod" ]] && _present_grubmodules+=("${_grubmodule}")
++        done
++        grubmodules=("${_present_grubmodules[@]}")
++    fi
+     grub-mkstandalone -O "$grub_target" \
+         --modules="${grubmodules[*]}" \
+         --locales="en@quot" \
