@@ -1,0 +1,11 @@
+[Unit]
+Description=DIAG ONLY: collect the installed Omarchy system's boot logs to screen and stick
+ConditionArchitecture=arm64
+After=systemd-user-sessions.service getty.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/omarchy-collect-logs
+
+[Install]
+WantedBy=multi-user.target

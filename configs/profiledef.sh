@@ -71,4 +71,5 @@ if [[ $arch == aarch64 ]]; then
   file_permissions["/etc/mkinitcpio.d/linux.preset"]="0:0:644"
   file_permissions["/root/customize_airootfs.sh"]="0:0:755"
   file_permissions["/root/live-uki.sh"]="0:0:755"
+  file_permissions["/usr/local/bin/omarchy-collect-logs"]="0:0:755"
 fi

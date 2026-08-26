@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+# DIAG ONLY (fork branch snapdragon-diag, never merge).
+#
+# Find an installed Omarchy system on any attached disk, pull the logs of its
+# most recent boot out of its journal, and put them where a person with no
+# working keyboard can still get them: on the screen (tty2, large font, one
+# photo) and as files on this stick's FAT partition (label ARCHISO_EFI) and on
+# the installed system's ESP. Runs once from omarchy-collect-logs.service on
+# every live boot; does nothing visible when no install is found.
+set -u
+W=/run/omarchy-collect
+out=$W/out; mkdir -p "$out" "$W/root" "$W/log" "$W/esp" "$W/stick"
+stamp=$(date -u +%Y%m%d-%H%M%S)
+say() { printf '%s\n' "$*" >>"$out/summary.txt"; }
+
+# --- locate the install -----------------------------------------------------
+found=""
+for part in $(lsblk -rno PATH,FSTYPE | awk '$2=="btrfs"{print $1}'); do
+  mount -o ro,subvol=@ "$part" "$W/root" 2>>"$out/collect.log" || continue
+  if [[ -d $W/root/usr/share/omarchy ]]; then found=$part; break; fi
+  umount "$W/root" 2>/dev/null
+done
+[[ -n $found ]] || { echo "no Omarchy install found" >>"$out/collect.log"; exit 0; }
+disk=$(lsblk -rno PKNAME "$found" | head -1)
+esp=$(lsblk -rno PATH,PARTTYPE "/dev/$disk" 2>/dev/null | awk '$2=="c12a7328-f81f-11d2-ba4b-00a0c93ec93b"{print $1; exit}')
+mount -o ro,subvol=@log "$found" "$W/log" 2>>"$out/collect.log"
+[[ -n $esp ]] && mount "$esp" "$W/esp" 2>>"$out/collect.log"
+
+say "== Omarchy log collector $stamp  (live: $(cat /proc/device-tree/model 2>/dev/null | tr -d '\0'))"
+say "install: $found  hostname=$(cat "$W/root/etc/hostname" 2>/dev/null)  omarchy=$(grep -m1 . "$W/root/usr/share/omarchy/version" 2>/dev/null)"
+
+# --- files from the target --------------------------------------------------
+cp "$W/log/omarchy-install.log" "$out/omarchy-install.log" 2>/dev/null
+cp "$W/esp/limine.conf" "$out/limine.conf" 2>/dev/null
+cp "$W/root/etc/kernel/uki.conf" "$out/uki.conf" 2>/dev/null
+cp "$W/root/etc/limine-entry-tool.d/"*.conf "$out/" 2>/dev/null
+cp "$W/root/etc/modprobe.d/qualcomm-adsp-nofw.conf" "$out/" 2>/dev/null
+ls -la "$W/esp/EFI/Linux/" >"$out/esp-linux.txt" 2>&1
+lsblk -o NAME,SIZE,FSTYPE,PARTTYPENAME,LABEL,MOUNTPOINTS >"$out/lsblk.txt" 2>&1
+dmesg >"$out/dmesg-live.txt" 2>&1
+
+# --- the target's journal ---------------------------------------------------
+J=$W/log/journal
+if [[ -d $J ]] && journalctl -D "$J" --list-boots --no-pager >"$out/boots.txt" 2>>"$out/collect.log" && [[ -s $out/boots.txt ]]; then
+  nboots=$(grep -cE '^ *-?[0-9]+ ' "$out/boots.txt")
+  bid=$(grep -E '^ *-?[0-9]+ ' "$out/boots.txt" | tail -1 | awk '{print $2}')
+  journalctl -D "$J" -b "$bid" -o short-monotonic --no-pager >"$out/journal-lastboot.txt" 2>>"$out/collect.log"
+  journalctl -D "$J" -b "$bid" -k -o short-monotonic --no-pager >"$out/kernel-lastboot.txt" 2>>"$out/collect.log"
+  journalctl -D "$J" -b "$bid" -p warning -o short-monotonic --no-pager >"$out/warnings-lastboot.txt" 2>>"$out/collect.log"
+  say "journal: $nboots boot(s) recorded; last boot $bid: $(grep -E '^ *-?[0-9]+ ' "$out/boots.txt" | tail -1 | cut -c1-120)"
+  say "-- last kernel lines of that boot ($(wc -l <"$out/kernel-lastboot.txt") total):"
+  tail -n 26 "$out/kernel-lastboot.txt" | cut -c1-170 >>"$out/summary.txt"
+  say "-- last warnings/errors:"
+  tail -n 8 "$out/warnings-lastboot.txt" | cut -c1-170 >>"$out/summary.txt"
+else
+  say "journal: NONE from the installed system -> every boot so far died before the root disk was mounted (initramfs / display driver / SoC hang)."
+fi
+say "install log: $(grep -E 'Completed:|Failed:' "$out/omarchy-install.log" 2>/dev/null | tail -1 | cut -c1-110)"
+say "target cmdline: $(grep -m1 -oE 'cmdline: .*' "$out/limine.conf" 2>/dev/null | cut -c1-400)"
+
+# --- write out: stick FAT partition + target ESP ----------------------------
+written=""
+for target in stick esp; do
+  if [[ $target == stick ]]; then
+    mount /dev/disk/by-label/ARCHISO_EFI "$W/stick" 2>>"$out/collect.log" || mount -o remount,rw "$W/stick" 2>/dev/null || continue
+    dest=$W/stick/omarchy-diag/$stamp
+  else
+    [[ -n $esp ]] || continue
+    mount -o remount,rw "$W/esp" 2>>"$out/collect.log" || continue
+    dest=$W/esp/omarchy-diag/$stamp
+  fi
+  mkdir -p "$dest" || continue
+  for f in "$out"/*; do
+    if [[ $(stat -c %s "$f") -gt 1500000 ]]; then xz -c "$f" >"$dest/$(basename "$f").xz"; else cp "$f" "$dest/"; fi
+  done
+  sync; written="$written $target"
+done
+say "files written to:${written:- nowhere (no writable partition)}  [stick = ARCHISO_EFI:/omarchy-diag/$stamp]"
+say "PHOTOGRAPH THIS SCREEN. Ctrl+Alt+F1 returns to the installer."
+cp "$out/summary.txt" "$W/stick/omarchy-diag/$stamp/" 2>/dev/null; cp "$out/summary.txt" "$W/esp/omarchy-diag/$stamp/" 2>/dev/null; sync
+umount "$W/stick" "$W/esp" "$W/log" "$W/root" 2>/dev/null
+
+# --- screen -----------------------------------------------------------------
+setfont -C /dev/tty2 ter-124b 2>/dev/null || setfont -C /dev/tty2 ter-120b 2>/dev/null
+{ printf '\033[2J\033[H'; cat "$out/summary.txt"; } >/dev/tty2 2>/dev/null
+chvt 2 2>/dev/null
+exit 0
