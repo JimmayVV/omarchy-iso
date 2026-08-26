@@ -13,6 +13,13 @@ alsa-utils
 amd-ucode
 arch-install-scripts
 archinstall
+# Arch Linux ARM signs its repositories with its own key, which lives in this
+# package rather than archlinux-keyring; Arch's `base` does not pull it in.
+# Listed here because this file also feeds the offline mirror the installer
+# pacstraps the target from -- omarchy's install/post-install/pacman.sh takes
+# it from there and populates the target keyring, without which the first
+# signed sync on the installed system fails with "unknown trust".
+archlinuxarm-keyring
 b43-fwcutter
 base
 bcachefs-tools
