@@ -62,6 +62,7 @@ file_permissions=(
   ["/usr/local/bin/omarchy-install-diagnose-media"]="0:0:755"
   ["/usr/local/bin/omarchy-iso-install"]="0:0:755"
   ["/usr/local/bin/omarchy-upload-log"]="0:0:755"
+  ["/usr/local/bin/omarchy-collect-logs"]="0:0:755"
   ["/var/cache/omarchy/mirror/offline/"]="0:0:775"
 )
 
@@ -71,5 +72,4 @@ if [[ $arch == aarch64 ]]; then
   file_permissions["/etc/mkinitcpio.d/linux.preset"]="0:0:644"
   file_permissions["/root/customize_airootfs.sh"]="0:0:755"
   file_permissions["/root/live-uki.sh"]="0:0:755"
-  file_permissions["/usr/local/bin/omarchy-collect-logs"]="0:0:755"
 fi
