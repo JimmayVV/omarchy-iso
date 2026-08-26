@@ -1,0 +1,93 @@
+name: Verify the aarch64 pacman restore
+
+# Throwaway verification for JimmayVV/omarchy-iso#29. The restore that
+# omarchy's install/post-install/pacman.sh performs on aarch64 writes a
+# pacman.conf and a mirrorlist and then populates the keyring; this runs that
+# exact sequence in a stock Arch Linux ARM container on a native arm64 runner,
+# starting from a wiped keyring, and checks that a system configured that way
+# syncs every repository and installs a signed package.
+#
+# --privileged is a container concession, not a config one: pacman 7 confines
+# its download user with Landlock, which the runner's container runtime refuses
+# ("switching to sandbox user 'alpm' failed"). The configs under test go in
+# byte-identical to what ships, and pacman is invoked exactly as an installed
+# system invokes it.
+#
+# Delete with the branch once #29 is closed.
+
+on:
+  push:
+    branches: [research/aarch64-pacman-restore]
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    env:
+      OMARCHY_RAW: https://raw.githubusercontent.com/JimmayVV/omarchy/snapdragon/default/pacman
+    steps:
+      - name: Fetch the configs the restore writes
+        run: |
+          set -euxo pipefail
+          curl -fsSL -o pacman-aarch64.conf "$OMARCHY_RAW/pacman-aarch64.conf"
+          curl -fsSL -o mirrorlist-aarch64  "$OMARCHY_RAW/mirrorlist-aarch64"
+          cat pacman-aarch64.conf
+          cat mirrorlist-aarch64
+          uname -m
+
+      # The G1q's failure was "unknown trust": the key was present but not
+      # locally signed. A wiped keyring is the stricter form of the same state
+      # and is what a container can reproduce; --init and --populate are what
+      # both are fixed by.
+      - name: Control - an unpopulated keyring rejects the signed install
+        run: |
+          set -euxo pipefail
+          docker run --rm --privileged -v "$PWD:/w:ro" menci/archlinuxarm:base-devel bash -euxo pipefail -c '
+            install -Dm644 /w/pacman-aarch64.conf /etc/pacman.conf
+            install -Dm644 /w/mirrorlist-aarch64 /etc/pacman.d/mirrorlist
+            rm -rf /etc/pacman.d/gnupg
+            pacman-key --init
+            pacman -Sy
+            if pacman -S --noconfirm evtest; then
+              echo "UNEXPECTED: a signed install succeeded on an unpopulated keyring" >&2
+              exit 1
+            fi
+            echo "OK: signed install refused before --populate"
+          '
+
+      - name: The restore - configs plus keyring, then real package sources
+        run: |
+          set -euxo pipefail
+          docker run --rm --privileged -v "$PWD:/w:ro" menci/archlinuxarm:base-devel bash -euxo pipefail -c '
+            install -Dm644 /w/pacman-aarch64.conf /etc/pacman.conf
+            install -Dm644 /w/mirrorlist-aarch64 /etc/pacman.d/mirrorlist
+            rm -rf /etc/pacman.d/gnupg
+
+            # ...the three steps install/post-install/pacman.sh runs on aarch64.
+            pacman-key --init
+            pacman-key --populate
+
+            # Every repository syncs, and none 404s: the absent [omarchy]
+            # section is what keeps pkgs.omarchy.org out of the log.
+            pacman -Syu --noconfirm 2>&1 | tee /tmp/sync.log
+            for repo in core extra alarm aur; do
+              grep -qE "^ $repo\b" /tmp/sync.log || {
+                echo "MISSING: $repo did not sync" >&2; exit 1; }
+            done
+            if grep -Ei "404|not found|failed retrieving" /tmp/sync.log; then
+              echo "UNEXPECTED: a repository failed to retrieve" >&2; exit 1
+            fi
+
+            # The exact command that failed on the G1q.
+            pacman -S --noconfirm evtest
+            command -v evtest
+
+            # The keyring package the restore takes from the offline mirror
+            # before swapping the config; the ISO now carries it for that step.
+            pacman -Si archlinuxarm-keyring | head -5
+
+            echo "alarm: $(pacman -Slq alarm | wc -l) packages"
+            echo "aur:   $(pacman -Slq aur | wc -l) packages"
+            echo "OK: aarch64 package sources work"
+          '
