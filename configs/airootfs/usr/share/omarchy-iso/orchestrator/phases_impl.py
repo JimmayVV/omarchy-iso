@@ -203,7 +203,35 @@ def _early_packages() -> list[str]:
 # imports it, so no patching happens here.
 # ─────────────────────────────────────────────────────────────────────────────
 
+# Snapdragon laptops need vendor-signed firmware that exists only on the
+# machine's Windows partition, which a full-disk install destroys. The live
+# session saves the files here and _prepare_target_setup copies them into the
+# target, where omarchy's install/hardware/qualcomm/firmware.sh installs them.
+# qcom-firmware-extract ships only on the aarch64 ISO, so x86_64 never enters.
+LIVE_FIRMWARE_STAGE = Path("/run/omarchy/firmware")
+TARGET_FIRMWARE_STAGE = Path("var/lib/omarchy/firmware-stage")
+
+
+def _stage_qualcomm_firmware() -> None:
+    tool = shutil.which("qcom-firmware-extract")
+    if not tool:
+        return
+    info("› saving Qualcomm firmware from Windows before the disk is written")
+    # Idempotent (the configurator usually ran it already) and never fatal:
+    # without the files the system still installs and boots.
+    subprocess.run([tool, "--stage", str(LIVE_FIRMWARE_STAGE)], check=False)
+
+
+def _copy_firmware_stage_into_target(ctx: InstallContext) -> None:
+    if not (LIVE_FIRMWARE_STAGE / "manifest").is_file():
+        return
+    dst = ctx.target / TARGET_FIRMWARE_STAGE
+    if not dst.exists():
+        shutil.copytree(LIVE_FIRMWARE_STAGE, dst)
+
+
 def prepare_live(ctx: InstallContext) -> None:
+    _stage_qualcomm_firmware()
     if ctx.is_protected:
         info("› protected mode: skipping whole-disk cleanup")
     else:
@@ -1050,6 +1078,8 @@ def _prepare_target_setup(ctx: InstallContext) -> None:
             subprocess.run(["mount", "--bind", src, str(target_dst)], check=True)
             ctx.state["bind_mounts"].append(str(target_dst))
             mounted.add(str(target_dst))
+
+    _copy_firmware_stage_into_target(ctx)
 
     ctx.state["target_setup_prepared"] = True
 

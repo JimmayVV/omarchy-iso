@@ -76,6 +76,13 @@ linux-aarch64-pkgbase-shim
 # so it must be in the offline mirror; this file is the aarch64-only way in
 # (the omarchy repo's package lists are downloaded by the x86_64 build too).
 vulkan-freedreno
+# Copies the vendor-signed Qualcomm firmware (GPU zap shader, DSP images) a
+# Snapdragon laptop's device tree names from its Windows partition. The
+# configurator and orchestrator stage the files in the live session before
+# the disk is written (a full-disk install destroys the source), and
+# omarchy's install/hardware/qualcomm/firmware.sh installs them in the
+# target. omarchy-pkgs, arch=any; also feeds the offline mirror from here.
+qcom-firmware-extract
 livecd-sounds
 lsscsi
 lvm2

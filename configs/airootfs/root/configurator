@@ -399,6 +399,40 @@ detect_bitlocker() {
   return 1
 }
 
+# Snapdragon laptops need firmware signed by the laptop vendor (GPU zap
+# shader, DSP images) that exists only on the machine's Windows partition,
+# and a full-disk install destroys that partition. Save the files now, before
+# anything is written. qcom-firmware-extract ships only on the aarch64 ISO
+# (configs/packages.aarch64), so x86_64 never reaches this. Never aborts the
+# install: without the files the system boots, just without GPU acceleration,
+# audio or battery reporting until `sudo qcom-firmware-extract` is run.
+stage_qualcomm_firmware() {
+  command -v qcom-firmware-extract >/dev/null 2>&1 || return 0
+  [[ -d /sys/firmware/devicetree/base ]] || return 0
+
+  local stage=/run/omarchy/firmware
+  local missing saved
+  missing=$(qcom-firmware-extract --list-missing 2>/dev/null | grep -c . || true)
+  ((missing > 0)) || return 0
+
+  step "Saving Qualcomm firmware from Windows"
+  qcom-firmware-extract --stage "$stage" >/run/omarchy/firmware-stage.log 2>&1 || true
+  saved=$(grep -c . "$stage/manifest" 2>/dev/null || true)
+  if ((saved >= missing)); then
+    say "Saved $saved firmware files from Windows for the install."
+  elif ((saved > 0)); then
+    say "Saved $saved of $missing firmware files from Windows; the rest were not in the driver store."
+  else
+    say --foreground 1 "No Windows firmware found on this machine."
+    if grep -q BitLocker /run/omarchy/firmware-stage.log 2>/dev/null; then
+      say "The Windows partition is BitLocker-encrypted. Turn BitLocker off in Windows to let the firmware be read."
+    fi
+    say "Omarchy will install and boot, but GPU acceleration, audio and battery reporting need"
+    say "\`sudo qcom-firmware-extract\` afterwards with a Windows driver store of this laptop model."
+  fi
+  echo
+}
+
 # Look for an existing Windows ESP (FAT partition containing EFI/Microsoft) on $disk.
 detect_windows_esp() {
   local p tmp_mp
@@ -1087,12 +1121,14 @@ if $defer_provisioning; then
   # Jump straight to disk selection + overwrite confirmation (encrypted by
   # default, Ctrl+C toggles unencrypted). deferred provisioning is always a full-disk install.
   disk_form
+  stage_qualcomm_firmware
   until confirm_disk_overwrite; do
     disk_form
   done
   install_target="full_disk"
 else
   disk_form
+  stage_qualcomm_firmware
   select_installation
 fi
 
