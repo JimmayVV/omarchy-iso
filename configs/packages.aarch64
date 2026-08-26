@@ -64,6 +64,18 @@ linux-firmware-marvell
 # (gen70500_sqe), Wi-Fi/BT board data. Without it the live session has a
 # display but no GPU (JimmayVV/omarchy-iso#10).
 linux-firmware-qcom
+# Arch Linux ARM's kernel packages ship no /usr/lib/modules/*/pkgbase, and
+# limine-mkinitcpio-hook skips a kernel without one, so an installed system
+# would get no UKI and no Limine entry. The shim (omarchy-pkgs) writes pkgbase
+# and vmlinuz from a pacman hook and is a no-op once the kernel ships them. It
+# is listed here because this file also feeds the offline mirror the installer
+# pacstraps the target from; the orchestrator installs it into the target on
+# aarch64 (_early_bootstrap_packages). Retire with Arch Linux ARM PR #2215.
+linux-aarch64-pkgbase-shim
+# Vulkan for the Adreno GPU. omarchy's vulkan.sh installs it on Qualcomm SoCs,
+# so it must be in the offline mirror; this file is the aarch64-only way in
+# (the omarchy repo's package lists are downloaded by the x86_64 build too).
+vulkan-freedreno
 livecd-sounds
 lsscsi
 lvm2

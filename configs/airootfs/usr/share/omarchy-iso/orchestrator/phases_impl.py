@@ -156,8 +156,21 @@ EARLY_LUAROCKS_PACKAGES = [
 ]
 
 
+# Arch Linux ARM's kernel packages ship no /usr/lib/modules/*/pkgbase, and
+# limine-mkinitcpio-hook skips a kernel without one, so the target would get
+# no UKI and no Limine entry. The shim (omarchy-pkgs) writes pkgbase and
+# vmlinuz from a pacman hook and is a no-op once the kernel ships them.
+# Retire with Arch Linux ARM PR #2215.
+EARLY_BOOTSTRAP_AARCH64_PACKAGES = [
+    "linux-aarch64-pkgbase-shim",
+]
+
+
 def _early_bootstrap_packages() -> list[str]:
-    return [*EARLY_BOOTSTRAP_BASE_PACKAGES, _omarchy_settings_package()]
+    packages = [*EARLY_BOOTSTRAP_BASE_PACKAGES, _omarchy_settings_package()]
+    if platform.machine() == "aarch64":
+        packages.extend(EARLY_BOOTSTRAP_AARCH64_PACKAGES)
+    return packages
 
 
 def _early_user_seed_packages() -> list[str]:
