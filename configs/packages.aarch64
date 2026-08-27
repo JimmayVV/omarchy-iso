@@ -83,6 +83,13 @@ vulkan-freedreno
 # omarchy's install/hardware/qualcomm/firmware.sh installs them in the
 # target. omarchy-pkgs, arch=any; also feeds the offline mirror from here.
 qcom-firmware-extract
+# Points the audio names a Snapdragon laptop asks for -- the device tree's
+# topology file name, and alsa-ucm-conf's DMI-keyed card configuration -- at
+# the files linux-firmware and alsa-ucm-conf already ship for the identical
+# hardware of a machine they do know. omarchy's firmware.sh installs it on
+# Qualcomm SoCs, so it must be in the offline mirror; this file is the
+# aarch64-only way in. omarchy-pkgs, arch=any.
+qcom-firmware-compat
 livecd-sounds
 lsscsi
 lvm2
